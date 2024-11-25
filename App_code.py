@@ -1,133 +1,150 @@
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.preprocessing import StandardScaler
-import statsmodels.api as sm
-from datetime import datetime
-import pytz
 
-# Load your dataset (make sure your file path is correct)
-data = pd.read_csv('smart_traffic_data.csv')
+# Set the title of the app
+st.title('Smart Traffic Optimization and Emission Reduction System')
 
-# Show the first few rows of the dataset
-print(data.head())
+# Upload the dataset
+st.sidebar.header('Upload Your Dataset')
+uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
-# Data Preprocessing
+if uploaded_file is not None:
+    # Load the dataset
+    data = pd.read_csv(uploaded_file)
+    st.write("Dataset Loaded Successfully!")
+    st.write(data.head())  # Display the first few rows of the dataset
 
-# Handle missing values
-missing_data = data.isnull().sum()
-print(f"Missing data:\n{missing_data}")
+    # Data Preprocessing
+    st.header("Data Preprocessing")
 
-# Fill missing values with the mean (or you can choose a different method)
-data.fillna(data.mean(), inplace=True)
+    # Handle missing values
+    if st.checkbox('Fill missing values with the mean'):
+        data.fillna(data.mean(), inplace=True)
+        st.write("Missing values filled with the mean of respective columns.")
 
-# Convert Timestamp to datetime format
-data['Timestamp'] = pd.to_datetime(data['Timestamp'], format='%Y-%m-%d %H:%M:%S')
+    # Convert 'Timestamp' to datetime format
+    data['Timestamp'] = pd.to_datetime(data['Timestamp'], format='%Y-%m-%d %H:%M:%S')
 
-# Extract additional time-based features
-data['Hour'] = data['Timestamp'].dt.hour
-data['Day'] = data['Timestamp'].dt.day
-data['Month'] = data['Timestamp'].dt.month
-data['Year'] = data['Timestamp'].dt.year
+    # Extract time features
+    data['Hour'] = data['Timestamp'].dt.hour
+    data['Day'] = data['Timestamp'].dt.day
+    data['Month'] = data['Timestamp'].dt.month
+    data['Year'] = data['Timestamp'].dt.year
 
-# Feature Engineering (optional)
-data['Public_Transport_Vehicles_Ratio'] = data['Number of public transport users per hour'] / (data['Traffic flow'] + data['Number of public transport users per hour'])
+    # Feature Engineering (optional)
+    data['Public_Transport_Vehicles_Ratio'] = data['Number of public transport users per hour'] / \
+        (data['Traffic flow'] + data['Number of public transport users per hour'])
 
-# Data Exploration: Visualize traffic flow and public transport usage over time
-plt.figure(figsize=(12,6))
-sns.lineplot(data=data, x='Timestamp', y='Traffic flow', label='Traffic Flow')
-sns.lineplot(data=data, x='Timestamp', y='Number of public transport users per hour', label='Public Transport Usage')
-plt.title('Traffic Flow and Public Transport Usage Over Time')
-plt.xlabel('Timestamp')
-plt.ylabel('Count')
-plt.legend()
-plt.show()
+    # Show the processed data
+    st.write(data.head())
 
-# Correlation analysis
-corr_matrix = data.corr()
-sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5)
-plt.title('Correlation Matrix')
-plt.show()
+    # Data Visualization
+    st.header("Data Visualization")
 
-# Prepare Data for Traffic Flow Prediction
-X = data[['Number of public transport users per hour', 'Weather Conditions', 'Day of the week', 'Temperature', 'Humidity', 'Road Incidents']]
-y = data['Traffic flow']
+    # Traffic Flow vs. Public Transport Usage over Time
+    if st.checkbox('Show Traffic Flow and Public Transport Usage'):
+        fig, ax = plt.subplots(figsize=(12, 6))
+        sns.lineplot(data=data, x='Timestamp', y='Traffic flow', label='Traffic Flow', ax=ax)
+        sns.lineplot(data=data, x='Timestamp', y='Number of public transport users per hour', label='Public Transport Usage', ax=ax)
+        plt.title('Traffic Flow and Public Transport Usage Over Time')
+        plt.xlabel('Timestamp')
+        plt.ylabel('Count')
+        plt.legend()
+        st.pyplot(fig)
 
-# Convert categorical variables (e.g., Weather Conditions, Day of the week) into numerical values
-X = pd.get_dummies(X, drop_first=True)
+    # Correlation Analysis
+    if st.checkbox('Show Correlation Matrix'):
+        corr_matrix = data.corr()
+        fig, ax = plt.subplots(figsize=(10, 6))
+        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5, ax=ax)
+        plt.title('Correlation Matrix')
+        st.pyplot(fig)
 
-# Scale the features
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+    # Prepare Data for Model Training
+    X = data[['Number of public transport users per hour', 'Weather Conditions', 'Day of the week', 'Temperature', 'Humidity', 'Road Incidents']]
+    y = data['Traffic flow']
 
-# Split the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+    # Convert categorical variables to numeric
+    X = pd.get_dummies(X, drop_first=True)
 
-# Train a Random Forest model (you can use other models like Linear Regression, Decision Tree, etc.)
-model = RandomForestRegressor(n_estimators=100, random_state=42)
-model.fit(X_train, y_train)
+    # Scale the data
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
 
-# Make predictions
-y_pred = model.predict(X_test)
+    # Split the data into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-# Evaluate the model
-mae = mean_absolute_error(y_test, y_pred)
-mse = mean_squared_error(y_test, y_pred)
-print(f"Mean Absolute Error: {mae}")
-print(f"Mean Squared Error: {mse}")
+    # Train Random Forest Model
+    st.header("Train the Model")
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
 
-# Traffic Optimization Function (simple dynamic signal control)
-def optimize_traffic_light(predicted_traffic_flow):
-    if predicted_traffic_flow > 1000:
-        return "Red Light - High Traffic, prioritize public transport"
-    elif predicted_traffic_flow > 500:
-        return "Green Light - Moderate Traffic"
-    else:
-        return "Green Light - Low Traffic"
+    # Make Predictions
+    y_pred = model.predict(X_test)
 
-# Emission Reduction Strategy Function
-def recommend_emission_reduction(public_transport_usage, bike_sharing_usage, road_incidents):
-    if public_transport_usage > 1000:
-        return "Encourage more public transport usage."
-    elif bike_sharing_usage > 500:
-        return "Promote bike-sharing programs."
-    elif road_incidents > 50:
-        return "Improve road safety and reduce incidents."
-    else:
-        return "Emission is low, no immediate actions needed."
+    # Evaluate the model
+    mae = mean_absolute_error(y_test, y_pred)
+    mse = mean_squared_error(y_test, y_pred)
 
-# Example prediction and optimization
-predicted_traffic_flow = model.predict(scaler.transform(pd.DataFrame([[100, 1, 1, 25, 80, 0]])))[0]  # Example input for prediction
-print("Optimized Traffic Light: ", optimize_traffic_light(predicted_traffic_flow))
+    st.write(f"Mean Absolute Error (MAE): {mae}")
+    st.write(f"Mean Squared Error (MSE): {mse}")
 
-# Example emission reduction recommendation
-print("Emission Reduction Strategy: ", recommend_emission_reduction(1200, 200, 30))
+    # User Input for Traffic Flow Prediction
+    st.header("Predict Traffic Flow")
+    public_transport_users = st.number_input("Number of Public Transport Users per Hour", min_value=0)
+    weather_condition = st.selectbox("Weather Condition", ['Sunny', 'Rainy', 'Cloudy', 'Snowy'])
+    day_of_week = st.selectbox("Day of the Week", ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
+    temperature = st.slider("Temperature (°C)", -20, 40)
+    humidity = st.slider("Humidity (%)", 0, 100)
+    road_incidents = st.number_input("Number of Road Incidents", min_value=0)
 
-# Visualize Traffic Flow and Emission Levels
-def plot_traffic_and_emission(data):
-    fig, ax1 = plt.subplots(figsize=(12,6))
+    # Process user inputs
+    input_data = pd.DataFrame([[public_transport_users, weather_condition, day_of_week, temperature, humidity, road_incidents]])
+    input_data = pd.get_dummies(input_data, drop_first=True)
+    input_data_scaled = scaler.transform(input_data)
 
-    # Plot traffic flow
-    ax1.set_xlabel('Timestamp')
-    ax1.set_ylabel('Traffic Flow', color='tab:blue')
-    ax1.plot(data['Timestamp'], data['Traffic flow'], color='tab:blue', label='Traffic Flow')
-    ax1.tick_params(axis='y', labelcolor='tab:blue')
+    # Make traffic flow prediction
+    if st.button("Predict Traffic Flow"):
+        predicted_traffic_flow = model.predict(input_data_scaled)[0]
+        st.write(f"Predicted Traffic Flow: {predicted_traffic_flow:.2f} vehicles per hour")
 
-    # Create another y-axis to plot emission levels
-    ax2 = ax1.twinx()
-    ax2.set_ylabel('Emission Level (estimated)', color='tab:green')
-    ax2.plot(data['Timestamp'], data['Traffic flow'] * 0.1, color='tab:green', label='Emission Level')  # Simple emission model
-    ax2.tick_params(axis='y', labelcolor='tab:green')
+    # Traffic Optimization Function
+    def optimize_traffic_light(predicted_traffic_flow):
+        if predicted_traffic_flow > 1000:
+            return "Red Light - High Traffic, prioritize public transport"
+        elif predicted_traffic_flow > 500:
+            return "Green Light - Moderate Traffic"
+        else:
+            return "Green Light - Low Traffic"
 
-    plt.title('Traffic Flow and Emission Levels Over Time')
-    plt.show()
+    # Display Traffic Light Optimization Suggestion
+    st.header("Traffic Light Optimization")
+    if st.button("Optimize Traffic Light"):
+        optimized_traffic = optimize_traffic_light(predicted_traffic_flow)
+        st.write(f"Optimized Traffic Light: {optimized_traffic}")
 
-# Plot traffic and emission
-plot_traffic_and_emission(data)
+    # Emission Reduction Strategy
+    def recommend_emission_reduction(public_transport_usage, bike_sharing_usage, road_incidents):
+        if public_transport_usage > 1000:
+            return "Encourage more public transport usage."
+        elif bike_sharing_usage > 500:
+            return "Promote bike-sharing programs."
+        elif road_incidents > 50:
+            return "Improve road safety and reduce incidents."
+        else:
+            return "Emission is low, no immediate actions needed."
 
+    st.header("Emission Reduction Strategy")
+    bike_sharing_usage = st.number_input("Number of Bikes Used per Hour", min_value=0)
+    emission_strategy = recommend_emission_reduction(public_transport_users, bike_sharing_usage, road_incidents)
+    st.write(f"Emission Reduction Strategy: {emission_strategy}")
+
+else:
+    st.warning("Please upload a CSV file to proceed.")
