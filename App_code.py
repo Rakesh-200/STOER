@@ -20,8 +20,8 @@ def load_and_process_data(uploaded_file=None):
         df.columns = df.columns.str.strip()
 
         # Check if the required columns are present in the uploaded CSV
-        required_columns = ['timestamp', 'public_transport_usage', 'traffic_flow', 
-                            'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 'day_of_week', 
+        required_columns = ['public_transport_usage', 'traffic_flow', 
+                            'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 
                             'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
                             'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
         
@@ -33,46 +33,11 @@ def load_and_process_data(uploaded_file=None):
         st.error("No file provided or uploaded.")
         return None
 
-    # Preprocess the data (handling types, etc.)
-    try:
-        # Strip leading/trailing whitespace from the timestamp column (if any)
-        df['timestamp'] = df['timestamp'].str.strip()
+    # Drop rows with any null values in the required columns
+    df = df.dropna(subset=required_columns)
 
-        # Try parsing the timestamp column using a flexible approach
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce', dayfirst=True)
-
-        # Check if any timestamps are invalid (NaT)
-        invalid_timestamp_count = df['timestamp'].isnull().sum()
-
-        if invalid_timestamp_count > 0:
-            st.warning(f"There are {invalid_timestamp_count} invalid or missing timestamps.")
-            
-            # Print the invalid rows for inspection
-            invalid_rows = df[df['timestamp'].isnull()]
-            st.write("Invalid rows with NaT timestamps:", invalid_rows.head(10))  # Show first few invalid rows
-
-            # If all timestamps are invalid, show an error message
-            if df['timestamp'].isnull().all():
-                st.error("All timestamps are invalid. Cannot proceed with data processing.")
-                return None
-            else:
-                # Fill invalid timestamps with the mean timestamp (if any valid timestamps exist)
-                valid_timestamps = df['timestamp'].dropna()
-                
-                if valid_timestamps.empty:
-                    st.error("No valid timestamps available to fill invalid ones.")
-                    return None
-                else:
-                    mean_timestamp = valid_timestamps.mean()  # Compute the mean of valid timestamps
-                    df['timestamp'].fillna(mean_timestamp, inplace=True)  # Replace NaT with mean timestamp
-                    st.write(f"Filled invalid timestamps with the mean timestamp: {mean_timestamp}")
-
-        # Extract day of the week from the timestamp
-        df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
-    
-    except Exception as e:
-        st.error(f"Error while parsing timestamps: {str(e)}")
-        return None
+    # Remove the timestamp column (since we're no longer considering it)
+    df = df.drop(columns=['timestamp'], errors='ignore')
 
     # Convert categorical columns to numeric using LabelEncoder
     le = LabelEncoder()
@@ -100,7 +65,7 @@ def train_traffic_model(df):
     features = ['public_transport_usage', 'bike_sharing_usage', 
                 'pedestrian_count', 'temperature', 'humidity', 'road_incidents', 
                 'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
-                'event', 'weather_conditions', 'holiday', 'day_of_week']
+                'event', 'weather_conditions', 'holiday']
     target = 'traffic_flow'
     
     # Select features and target
@@ -194,8 +159,7 @@ if uploaded_file is not None:
                 'pedestrian_incidents': [pedestrian_incidents],
                 'event': [0],  # Assuming default or encoded value for 'event'
                 'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
-                'holiday': [0],  # Assuming default or encoded value for 'holiday'
-                'day_of_week': [0]  # Default day of week
+                'holiday': [0]  # Assuming default or encoded value for 'holiday'
             }
 
             input_df = pd.DataFrame(input_data)
