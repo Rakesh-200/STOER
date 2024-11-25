@@ -1,7 +1,6 @@
-streamlit
-pandas
-
-vaex
-matplotlib
-seaborn
-scikit-learn
+streamlit==1.16.0
+pandas==1.5.3
+vaex==4.3.0
+matplotlib==3.7.1
+seaborn==0.11.2
+scikit-learn==1.2.1
