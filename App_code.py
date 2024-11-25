@@ -47,8 +47,13 @@ def load_and_process_data(uploaded_file=None):
     df['weather_conditions'] = le.fit_transform(df['weather_conditions'].astype(str))
     df['holiday'] = le.fit_transform(df['holiday'].astype(str))
 
-    # Fill missing numerical values with column mean
-    df.fillna(df.mean(), inplace=True)
+    # Fill missing numerical values with column mean (only for numeric columns)
+    numeric_columns = df.select_dtypes(include=['float64', 'int64']).columns
+    df[numeric_columns] = df[numeric_columns].fillna(df[numeric_columns].mean())
+
+    # Fill missing categorical values (if any) with 'Unknown' or a placeholder
+    categorical_columns = df.select_dtypes(include=['object']).columns
+    df[categorical_columns] = df[categorical_columns].fillna('Unknown')
 
     # Drop rows with any remaining null values after processing
     df = df.dropna()
@@ -186,4 +191,4 @@ if uploaded_file is not None:
                     traffic_flow_prediction[0], weather_conditions, public_transport_usage)
                 st.write(f"Recommended Strategy: {emission_recommendation}")
 else:
-    st.write("Please upload a CSV file to get started.")
+    st.info("Please upload a CSV file to get started.")
