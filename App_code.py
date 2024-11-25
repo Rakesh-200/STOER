@@ -1,7 +1,7 @@
 import pandas as pd
 import dask.dataframe as dd
 from sklearn.ensemble import RandomForestRegressor
-from flask import Flask, request, jsonify
+import streamlit as st
 
 # --------- Data Preprocessing ---------
 
@@ -56,32 +56,65 @@ def recommend_emission_reduction(traffic_flow, weather_conditions, public_transp
     else:
         return "Promote carpooling and use eco-friendly vehicles"
 
-# --------- Web App (Flask) ---------
+# --------- Streamlit Interface ---------
 
-app = Flask(__name__)
+# Streamlit Title and Description
+st.title("Smart Traffic Optimization and Emission Reduction System")
+st.write("""
+    This system predicts traffic flow and suggests actions for emission reduction based on traffic and environmental factors.
+""")
 
-# Load and preprocess data
-data = load_and_process_data('data/raw/traffic_data.csv')
+# Load and preprocess the data
+@st.cache
+def load_data():
+    # Load and preprocess data once
+    data = load_and_process_data('data/raw/traffic_data.csv')
+    return data
+
+data = load_data()
 
 # Train the traffic model
 traffic_model = train_traffic_model(data)
 
-@app.route('/predict_traffic', methods=['POST'])
-def predict_traffic_flow():
-    data = request.json  # Receive new data for prediction
-    new_data = pd.DataFrame(data)  # Convert received data into DataFrame
-    traffic_flow_prediction = predict_traffic(traffic_model, new_data)
-    return jsonify({"traffic_flow_prediction": traffic_flow_prediction.tolist()})
+# User inputs for traffic flow prediction
+st.header("Predict Traffic Flow")
+public_transport_users = st.number_input('Number of Public Transport Users (per hour)', min_value=0)
+bike_sharing_usage = st.number_input('Bike Sharing Usage (per hour)', min_value=0)
+pedestrian_count = st.number_input('Pedestrian Count (per hour)', min_value=0)
+temperature = st.number_input('Temperature (°C)', min_value=-50, max_value=50)
+humidity = st.number_input('Humidity (%)', min_value=0, max_value=100)
+road_incidents = st.number_input('Road Incidents (per hour)', min_value=0)
+public_transport_delay = st.number_input('Public Transport Delay (minutes)', min_value=0)
+bike_availability = st.number_input('Bike Availability (per hour)', min_value=0)
+pedestrian_incidents = st.number_input('Pedestrian Incidents (per hour)', min_value=0)
 
-@app.route('/recommend_emission_reduction', methods=['POST'])
-def emission_reduction():
-    data = request.json
-    traffic_flow = data['traffic_flow']
-    weather_conditions = data['weather_conditions']
-    public_transport_usage = data['public_transport_usage']
-    
-    recommendation = recommend_emission_reduction(traffic_flow, weather_conditions, public_transport_usage)
-    return jsonify({"recommendation": recommendation})
+# Prepare the input data for prediction
+input_data = {
+    'Number of public transport users per hour': [public_transport_users],
+    'Bike sharing usage': [bike_sharing_usage],
+    'Pedestrian count': [pedestrian_count],
+    'Temperature': [temperature],
+    'Humidity': [humidity],
+    'Road Incidents': [road_incidents],
+    'Public transport delay': [public_transport_delay],
+    'Bike availability': [bike_availability],
+    'Pedestrian incidents': [pedestrian_incidents]
+}
 
-if __name__ == "__main__":
-    app.run(debug=True)
+input_df = pd.DataFrame(input_data)
+
+# Predict traffic flow based on user input
+if st.button('Predict Traffic Flow'):
+    traffic_flow_prediction = predict_traffic(traffic_model, input_df)
+    st.write(f"Predicted Traffic Flow: {traffic_flow_prediction[0]} vehicles per hour")
+
+# User inputs for emission reduction recommendation
+st.header("Recommend Emission Reduction Strategy")
+weather_conditions = st.selectbox('Weather Conditions', ['Clear', 'Cloudy', 'Rainy', 'Snowy'])
+public_transport_usage = st.number_input('Public Transport Usage (per hour)', min_value=0)
+
+# Provide emission reduction recommendation
+if st.button('Get Emission Reduction Recommendation'):
+    emission_recommendation = recommend_emission_reduction(
+        traffic_flow_prediction[0], weather_conditions, public_transport_usage)
+    st.write(f"Recommended Strategy: {emission_recommendation}")
