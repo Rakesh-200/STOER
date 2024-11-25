@@ -15,19 +15,24 @@ st.title('Smart Traffic Optimization and Emission Reduction System')
 st.sidebar.header('Upload Your Dataset')
 uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
+# Cache the data processing to speed up file loading
+@st.cache_data
+def load_data(file):
+    data = pd.read_csv(file)
+    
+    # Drop rows with null values in any column
+    data = data.dropna()  # This drops rows with null values in any column
+    return data
+
 if uploaded_file is not None:
-    # Load the dataset
-    data = pd.read_csv(uploaded_file)
+    # Load the dataset and preprocess
+    data = load_data(uploaded_file)
+    
     st.write("Dataset Loaded Successfully!")
     st.write(data.head())  # Display the first few rows of the dataset
 
     # Data Preprocessing
     st.header("Data Preprocessing")
-
-    # Handle missing values
-    if st.checkbox('Fill missing values with the mean'):
-        data.fillna(data.mean(), inplace=True)
-        st.write("Missing values filled with the mean of respective columns.")
 
     # Convert 'Timestamp' to datetime format
     data['Timestamp'] = pd.to_datetime(data['Timestamp'], format='%Y-%m-%d %H:%M:%S')
