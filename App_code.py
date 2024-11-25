@@ -33,17 +33,12 @@ def load_and_process_data(uploaded_file=None):
         st.error("No file provided or uploaded.")
         return None
 
-    # Store the number of rows before cleaning
-    initial_row_count = df.shape[0]
-
     # Preprocess the data (handling types, etc.)
     try:
-        # Let's first look at the first few timestamp entries to see if there's an issue with the data
-        st.write("Preview of timestamps in the dataset:")
-        st.write(df['timestamp'].head(10))  # Show the first few timestamp values
+        # Strip leading/trailing whitespace from the timestamp column (if any)
+        df['timestamp'] = df['timestamp'].str.strip()
 
         # Try parsing the timestamp column using a flexible approach
-        # This will handle different formats and invalid timestamps by coercing them into NaT
         df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce', dayfirst=True)
 
         # Check if any timestamps are invalid (NaT)
@@ -88,15 +83,10 @@ def load_and_process_data(uploaded_file=None):
     # Fill missing values with the mean of each column (for numerical columns)
     df.fillna(df.mean(), inplace=True)
 
-    # Store the number of rows after cleaning
-    final_row_count = df.shape[0]
-
     # Check if the DataFrame is empty after cleaning
-    if final_row_count == 0:
+    if df.empty:
         st.error(f"All data has been removed during cleaning. Please upload a file with valid data.")
         return None
-    elif final_row_count < initial_row_count:
-        st.warning(f"{initial_row_count - final_row_count} rows were removed due to missing or invalid data.")
 
     return df
 
