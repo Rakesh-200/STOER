@@ -1,13 +1,8 @@
 import streamlit as st
 import pandas as pd
 import dask.dataframe as dd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from sklearn.preprocessing import StandardScaler
+import tempfile
+import os
 
 # Set the title of the app
 st.title('Smart Traffic Optimization and Emission Reduction System')
@@ -19,8 +14,13 @@ uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 # Cache the data processing to speed up file loading
 @st.cache_data
 def load_data_dask(file):
+    # Save the uploaded file to a temporary directory
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+        temp_file.write(file.getvalue())  # Write the uploaded content to the temp file
+        temp_file_path = temp_file.name  # Get the path of the temp file
+
     # Read CSV using dask (efficient for large files)
-    ddf = dd.read_csv(file)
+    ddf = dd.read_csv(temp_file_path)
     
     # Drop rows with null values in any column
     ddf = ddf.dropna()  # This drops rows with null values in any column
