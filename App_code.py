@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import dask.dataframe as dd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -17,16 +18,17 @@ uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
 # Cache the data processing to speed up file loading
 @st.cache_data
-def load_data(file):
-    data = pd.read_csv(file)
+def load_data_dask(file):
+    # Read CSV using dask (efficient for large files)
+    ddf = dd.read_csv(file)
     
     # Drop rows with null values in any column
-    data = data.dropna()  # This drops rows with null values in any column
-    return data
+    ddf = ddf.dropna()  # This drops rows with null values in any column
+    return ddf.compute()  # Converts dask dataframe to pandas dataframe for further processing
 
 if uploaded_file is not None:
     # Load the dataset and preprocess
-    data = load_data(uploaded_file)
+    data = load_data_dask(uploaded_file)
     
     st.write("Dataset Loaded Successfully!")
     st.write(data.head())  # Display the first few rows of the dataset
