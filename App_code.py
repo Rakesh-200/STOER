@@ -36,9 +36,6 @@ def load_and_process_data(uploaded_file=None):
     # Store the number of rows before cleaning
     initial_row_count = df.shape[0]
 
-    # Drop rows with any null values
-    df = df.dropna()
-
     # Preprocess the data (handling types, etc.)
     try:
         # Specify the exact format of the timestamp (DD-MM-YYYY hh.mm.ss AM/PM)
@@ -46,12 +43,24 @@ def load_and_process_data(uploaded_file=None):
     except Exception as e:
         st.error(f"Error while parsing timestamps: {str(e)}")
         return None
+
+    # Fill missing or invalid timestamps with the mean of valid timestamps
+    invalid_timestamp_count = df['timestamp'].isnull().sum()
     
-    # Drop rows with invalid or missing timestamps
-    rows_dropped = df['timestamp'].isnull().sum()
-    if rows_dropped > 0:
-        st.warning(f"There are {rows_dropped} invalid or missing timestamps in the dataset. These rows will be dropped.")
-        df = df.dropna(subset=['timestamp'])
+    if invalid_timestamp_count > 0:
+        st.warning(f"There are {invalid_timestamp_count} invalid or missing timestamps. These will be filled with the mean timestamp.")
+        
+        # Calculate the mean timestamp (excluding invalid ones)
+        valid_timestamps = df['timestamp'].dropna()
+        mean_timestamp = valid_timestamps.mean()
+        
+        # Fill invalid timestamps with the mean timestamp
+        df['timestamp'].fillna(mean_timestamp, inplace=True)
+        
+        # For rows where the timestamp was invalid, it will now have the mean timestamp
+        invalid_rows = df[df['timestamp'].isnull()]
+        if not invalid_rows.empty:
+            st.warning(f"Still have {invalid_rows.shape[0]} rows with invalid timestamps after filling.")
 
     # Extract day of the week
     df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
@@ -62,8 +71,8 @@ def load_and_process_data(uploaded_file=None):
     df['weather_conditions'] = le.fit_transform(df['weather_conditions'].astype(str))
     df['holiday'] = le.fit_transform(df['holiday'].astype(str))
 
-    # Drop rows with any remaining null values after processing
-    df = df.dropna()
+    # Fill missing values with the mean of each column (for numerical columns)
+    df.fillna(df.mean(), inplace=True)
 
     # Store the number of rows after cleaning
     final_row_count = df.shape[0]
