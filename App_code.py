@@ -1,124 +1,121 @@
 import streamlit as st
 import pandas as pd
-import vaex
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error
-import traceback
+import datetime
+import numpy as np
+import os
 
-try:
-    # Your app code here (e.g., loading data, visualizations)
-    st.title("Smart Traffic Optimization and Emission Reduction System")
+# Function to load data and clean it
+def load_data(uploaded_file):
+    try:
+        # Read the CSV file using pandas
+        df = pd.read_csv(uploaded_file)
+        
+        # Remove rows with any null values
+        df.dropna(inplace=True)
+        
+        # Convert timestamp to datetime
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+        
+        return df
+    except Exception as e:
+        st.error(f"Error loading the data: {e}")
+        return None
+
+# Function to display data overview
+def display_data(df):
+    st.subheader('Dataset Overview')
+    st.write(df.head())
+
+# Function to perform exploratory data analysis (EDA)
+def perform_eda(df):
+    st.subheader("Exploratory Data Analysis")
+    
+    # Summary statistics
+    st.write(df.describe())
+
+    # Visualizations
+    st.subheader("Traffic Flow vs Public Transport Usage")
+    plt.figure(figsize=(10,6))
+    sns.scatterplot(x=df['Number of public transport users per hour'], y=df['Traffic flow (no of vehicles passing specific point)'])
+    plt.title('Traffic Flow vs Public Transport Usage')
+    st.pyplot()
+
+    st.subheader("Traffic Flow vs Temperature")
+    plt.figure(figsize=(10,6))
+    sns.scatterplot(x=df['Temperature'], y=df['Traffic flow (no of vehicles passing specific point)'])
+    plt.title('Traffic Flow vs Temperature')
+    st.pyplot()
+
+    st.subheader("Traffic Flow by Day of the Week")
+    plt.figure(figsize=(10,6))
+    sns.boxplot(x=df['Day of the week'], y=df['Traffic flow (no of vehicles passing specific point)'])
+    plt.title('Traffic Flow by Day of the Week')
+    st.pyplot()
+
+# Function to train a regression model for prediction
+def predict_traffic(df):
+    st.subheader("Predict Traffic Flow")
+    
+    # Select features and target variable for prediction
+    features = ['Number of public transport users per hour', 'Bike sharing usage', 'Pedestrian count', 'Temperature', 'Humidity']
+    target = 'Traffic flow (no of vehicles passing specific point)'
+
+    # Check if all required columns are present in the dataframe
+    missing_cols = [col for col in features if col not in df.columns]
+    if missing_cols:
+        st.error(f"Missing columns: {', '.join(missing_cols)}")
+        return
+    
+    X = df[features]
+    y = df[target]
+    
+    # Split data into training and test sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Train a linear regression model
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+    
+    # Evaluate the model
+    st.write("Model Training Complete")
+    st.write(f"Model Coefficients: {model.coef_}")
+    st.write(f"Model Intercept: {model.intercept_}")
+    
+    # Predict traffic flow for the test set
+    predictions = model.predict(X_test)
+    
+    # Display predictions vs actual values
+    st.subheader("Predictions vs Actual Values")
+    prediction_df = pd.DataFrame({'Predictions': predictions, 'Actual': y_test})
+    st.write(prediction_df.head())
+
+    # Plotting the predictions vs actual values
+    plt.figure(figsize=(10,6))
+    plt.scatter(y_test, predictions)
+    plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], color='red', linestyle='--')
+    plt.title("Predictions vs Actual Values")
+    plt.xlabel("Actual Traffic Flow")
+    plt.ylabel("Predicted Traffic Flow")
+    st.pyplot()
+
+# Main function to run the Streamlit app
+def main():
+    st.title('Smart Traffic Optimization and Emission Reduction System')
+
+    # File uploader to upload CSV file
     uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
     if uploaded_file is not None:
-        # Load the file and process
-        st.write("File uploaded successfully!")
-        # Add the rest of your code here
-except Exception as e:
-    st.error("An error occurred. Please check the logs.")
-    st.write(traceback.format_exc())
-
-# Set page configuration for Streamlit
-st.set_page_config(page_title="Smart Traffic Optimization and Emission Reduction", layout="wide")
-
-# Title of the App
-st.title("Smart Traffic Optimization and Emission Reduction System")
-
-# File Upload
-uploaded_file = st.file_uploader("Upload your data (CSV file)", type=["csv"])
-
-def load_data(uploaded_file):
-    """Function to load large data efficiently using vaex"""
-    if uploaded_file is not None:
-        # Load using vaex for large CSVs (it handles memory efficiently)
-        try:
-            df = vaex.from_csv(uploaded_file, convert=True)
-            st.write(f"Data Loaded: {df.shape[0]} rows and {df.shape[1]} columns")
-            return df
-        except Exception as e:
-            st.error(f"Error loading data: {str(e)}")
-            return None
-    return None
-
-# Load the data if a file is uploaded
-data = load_data(uploaded_file)
-
-# Check if data is loaded successfully
-if data is not None:
-    # Display raw data preview
-    st.subheader("Raw Data Preview")
-    st.write(data.head())
-
-    # Data Cleaning: Removing rows with null values
-    data_cleaned = data.dropna()
-    st.write(f"After removing null values: {data_cleaned.shape[0]} rows left.")
+        # Load the data and display basic info
+        df = load_data(uploaded_file)
+        if df is not None:
+            display_data(df)
+            perform_eda(df)
+            predict_traffic(df)
     
-    # Display cleaned data preview
-    st.subheader("Cleaned Data Preview")
-    st.write(data_cleaned.head())
-
-    # Traffic Visualization: Plot traffic flow
-    st.subheader("Traffic Flow Visualization")
-    traffic_data = data_cleaned['Traffic Flow'].to_numpy()
-    plt.figure(figsize=(10, 6))
-    plt.plot(traffic_data)
-    plt.title("Traffic Flow Over Time")
-    plt.xlabel("Time (Hours)")
-    plt.ylabel("Traffic Flow (No of Vehicles)")
-    st.pyplot(plt)
-
-    # Weather Data Visualization: Plot temperature and humidity
-    st.subheader("Weather Data Visualization")
-    fig, ax = plt.subplots(1, 2, figsize=(15, 6))
-
-    ax[0].plot(data_cleaned['Temperature'], color='tab:blue')
-    ax[0].set_title("Temperature Over Time")
-    ax[0].set_xlabel("Time (Hours)")
-    ax[0].set_ylabel("Temperature (°C)")
-
-    ax[1].plot(data_cleaned['Humidity'], color='tab:orange')
-    ax[1].set_title("Humidity Over Time")
-    ax[1].set_xlabel("Time (Hours)")
-    ax[1].set_ylabel("Humidity (%)")
-
-    st.pyplot(fig)
-
-    # Traffic Optimization Model: Predict Traffic Flow Based on Weather Conditions
-    st.subheader("Traffic Optimization Model: Predicting Traffic Flow")
-
-    # Extract features and target variable for modeling
-    features = ['Temperature', 'Humidity', 'Public Transport Usage', 'Bike Usage', 'Pedestrian Count']
-    target = 'Traffic Flow'
-
-    # Check if all required columns are present
-    if all(col in data_cleaned.columns for col in features + [target]):
-        X = data_cleaned[features].to_pandas_df()  # Convert to pandas for scikit-learn
-        y = data_cleaned[target].to_pandas_df()
-
-        # Split the data into training and testing sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-        # Train a Linear Regression model
-        model = LinearRegression()
-        model.fit(X_train, y_train)
-
-        # Predict the traffic flow on the test set
-        y_pred = model.predict(X_test)
-
-        # Calculate and display the model performance
-        mse = mean_squared_error(y_test, y_pred)
-        st.write(f"Mean Squared Error (MSE) of the Model: {mse:.2f}")
-
-        # Display prediction vs actual values
-        st.subheader("Prediction vs Actual Traffic Flow")
-        df_pred = pd.DataFrame({'Actual': y_test.values.flatten(), 'Predicted': y_pred.flatten()})
-        st.write(df_pred.head(10))
-
-    else:
-        st.error("Required columns for modeling are missing. Please check your dataset.")
-else:
-    st.info("Please upload a dataset to start.")
-
+if __name__ == "__main__":
+    main()
