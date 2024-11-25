@@ -1,8 +1,12 @@
 import streamlit as st
 import pandas as pd
-import dask.dataframe as dd
-import tempfile
-import os
+import vaex
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 # Set the title of the app
 st.title('Smart Traffic Optimization and Emission Reduction System')
@@ -11,24 +15,18 @@ st.title('Smart Traffic Optimization and Emission Reduction System')
 st.sidebar.header('Upload Your Dataset')
 uploaded_file = st.sidebar.file_uploader("Choose a CSV file", type="csv")
 
-# Cache the data processing to speed up file loading
+# Cache the data processing to speed up file loading using vaex
 @st.cache_data
-def load_data_dask(file):
-    # Save the uploaded file to a temporary directory
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-        temp_file.write(file.getvalue())  # Write the uploaded content to the temp file
-        temp_file_path = temp_file.name  # Get the path of the temp file
-
-    # Read CSV using dask (efficient for large files)
-    ddf = dd.read_csv(temp_file_path)
-    
-    # Drop rows with null values in any column
-    ddf = ddf.dropna()  # This drops rows with null values in any column
-    return ddf.compute()  # Converts dask dataframe to pandas dataframe for further processing
+def load_data_vaex(file):
+    # Use vaex to read large csv
+    df = vaex.open(file)
+    # Drop rows with null values efficiently using vaex
+    df = df.dropna()
+    return df
 
 if uploaded_file is not None:
     # Load the dataset and preprocess
-    data = load_data_dask(uploaded_file)
+    data = load_data_vaex(uploaded_file)
     
     st.write("Dataset Loaded Successfully!")
     st.write(data.head())  # Display the first few rows of the dataset
@@ -58,8 +56,8 @@ if uploaded_file is not None:
     # Traffic Flow vs. Public Transport Usage over Time
     if st.checkbox('Show Traffic Flow and Public Transport Usage'):
         fig, ax = plt.subplots(figsize=(12, 6))
-        sns.lineplot(data=data, x='Timestamp', y='Traffic flow', label='Traffic Flow', ax=ax)
-        sns.lineplot(data=data, x='Timestamp', y='Number of public transport users per hour', label='Public Transport Usage', ax=ax)
+        sns.lineplot(data=data.to_pandas(), x='Timestamp', y='Traffic flow', label='Traffic Flow', ax=ax)
+        sns.lineplot(data=data.to_pandas(), x='Timestamp', y='Number of public transport users per hour', label='Public Transport Usage', ax=ax)
         plt.title('Traffic Flow and Public Transport Usage Over Time')
         plt.xlabel('Timestamp')
         plt.ylabel('Count')
@@ -68,7 +66,7 @@ if uploaded_file is not None:
 
     # Correlation Analysis
     if st.checkbox('Show Correlation Matrix'):
-        corr_matrix = data.corr()
+        corr_matrix = data.to_pandas().corr()
         fig, ax = plt.subplots(figsize=(10, 6))
         sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt='.2f', linewidths=0.5, ax=ax)
         plt.title('Correlation Matrix')
@@ -79,14 +77,14 @@ if uploaded_file is not None:
     y = data['Traffic flow']
 
     # Convert categorical variables to numeric
-    X = pd.get_dummies(X, drop_first=True)
+    X = pd.get_dummies(X.to_pandas(), drop_first=True)
 
     # Scale the data
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
     # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y.to_pandas(), test_size=0.2, random_state=42)
 
     # Train Random Forest Model
     st.header("Train the Model")
