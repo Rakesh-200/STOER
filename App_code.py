@@ -56,11 +56,6 @@ def load_and_process_data(uploaded_file=None):
         
         # Fill invalid timestamps with the mean timestamp
         df['timestamp'].fillna(mean_timestamp, inplace=True)
-        
-        # For rows where the timestamp was invalid, it will now have the mean timestamp
-        invalid_rows = df[df['timestamp'].isnull()]
-        if not invalid_rows.empty:
-            st.warning(f"Still have {invalid_rows.shape[0]} rows with invalid timestamps after filling.")
 
     # Extract day of the week
     df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
