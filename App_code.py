@@ -6,6 +6,20 @@ import seaborn as sns
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
+import traceback
+
+try:
+    # Your app code here (e.g., loading data, visualizations)
+    st.title("Smart Traffic Optimization and Emission Reduction System")
+    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+
+    if uploaded_file is not None:
+        # Load the file and process
+        st.write("File uploaded successfully!")
+        # Add the rest of your code here
+except Exception as e:
+    st.error("An error occurred. Please check the logs.")
+    st.write(traceback.format_exc())
 
 # Set page configuration for Streamlit
 st.set_page_config(page_title="Smart Traffic Optimization and Emission Reduction", layout="wide")
