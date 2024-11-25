@@ -1,6 +1,7 @@
 import pandas as pd
 import dask.dataframe as dd
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
 import streamlit as st
 
 # --------- Data Preprocessing ---------
@@ -43,11 +44,12 @@ def load_and_process_data(uploaded_file=None):
 
     df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
     
-    # Convert categorical columns to category type for optimization
-    df['event'] = df['event'].astype('category')
-    df['weather_conditions'] = df['weather_conditions'].astype('category')
-    df['holiday'] = df['holiday'].astype('category')
-    
+    # Convert categorical columns to numeric using LabelEncoder or get_dummies
+    le = LabelEncoder()
+    df['event'] = le.fit_transform(df['event'].astype(str))
+    df['weather_conditions'] = le.fit_transform(df['weather_conditions'].astype(str))
+    df['holiday'] = le.fit_transform(df['holiday'].astype(str))
+
     return df
 
 # --------- Traffic Optimization ---------
@@ -59,12 +61,22 @@ def train_traffic_model(df):
     # Features and target variable
     features = ['public_transport_usage', 'bike_sharing_usage', 
                 'pedestrian_count', 'temperature', 'humidity', 'road_incidents', 
-                'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
+                'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
+                'event', 'weather_conditions', 'holiday', 'day_of_week']
     target = 'traffic_flow'
     
     # Select features and target
     X = df[features]
     y = df[target]
+    
+    # Check for missing values (again) in case any are left after preprocessing
+    if X.isnull().sum().sum() > 0 or y.isnull().sum() > 0:
+        st.error("There are still missing values in the features or target variable.")
+        return None
+
+    # Ensure all data is numeric (this step is more robust after encoding)
+    X = X.apply(pd.to_numeric, errors='coerce')
+    y = y.apply(pd.to_numeric, errors='coerce')
     
     # Train a Random Forest model
     model = RandomForestRegressor(n_estimators=100, random_state=42)
@@ -134,7 +146,11 @@ if uploaded_file is not None:
             'road_incidents': [road_incidents],
             'public_transport_delay': [public_transport_delay],
             'bike_availability': [bike_availability],
-            'pedestrian_incidents': [pedestrian_incidents]
+            'pedestrian_incidents': [pedestrian_incidents],
+            'event': [0],  # Assuming default or encoded value for 'event'
+            'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
+            'holiday': [0],  # Assuming default or encoded value for 'holiday'
+            'day_of_week': [0]  # Default day of week
         }
 
         input_df = pd.DataFrame(input_data)
