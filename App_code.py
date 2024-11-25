@@ -38,37 +38,44 @@ def load_and_process_data(uploaded_file=None):
 
     # Preprocess the data (handling types, etc.)
     try:
-        # Specify the exact format of the timestamp (DD-MM-YYYY hh.mm.ss AM/PM)
+        # Let's first look at the first few timestamp entries to see if there's an issue with the data
+        st.write("Preview of timestamps in the dataset:")
+        st.write(df['timestamp'].head(10))  # Show the first few timestamp values
+
+        # Try parsing the timestamp column using the expected format
+        # We will use 'errors="coerce"' to convert invalid timestamps into NaT (Not a Time)
         df['timestamp'] = pd.to_datetime(df['timestamp'], format='%d-%m-%Y %I.%M.%S %p', errors='coerce')
+
+        # Check if any timestamps are invalid
+        invalid_timestamp_count = df['timestamp'].isnull().sum()
+
+        if invalid_timestamp_count > 0:
+            st.warning(f"There are {invalid_timestamp_count} invalid or missing timestamps.")
+            
+            # Print the invalid rows for inspection
+            invalid_rows = df[df['timestamp'].isnull()]
+            st.write("Invalid rows with NaT timestamps:", invalid_rows.head(10))  # Show first few invalid rows
+
+            # If invalid timestamps are found, let's see how many rows are valid
+            valid_timestamps = df['timestamp'].dropna()
+            
+            if valid_timestamps.empty:
+                st.error("All timestamps are invalid. Cannot proceed with data processing.")
+                return None
+            else:
+                # Calculate the mean timestamp (excluding invalid ones)
+                mean_timestamp = valid_timestamps.mean()
+
+                # Fill invalid timestamps with the mean timestamp
+                df['timestamp'].fillna(mean_timestamp, inplace=True)
+
+        # Extract day of the week from the timestamp
+        df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
+    
     except Exception as e:
         st.error(f"Error while parsing timestamps: {str(e)}")
         return None
 
-    # Identify rows where timestamps are invalid (NaT)
-    invalid_timestamp_count = df['timestamp'].isnull().sum()
-    
-    if invalid_timestamp_count > 0:
-        st.warning(f"There are {invalid_timestamp_count} invalid or missing timestamps.")
-        
-        # Print the first few invalid rows for debugging
-        st.write("Invalid rows:", df[df['timestamp'].isnull()].head())
-
-        # If invalid timestamps are found, let's see how many rows are valid
-        valid_timestamps = df['timestamp'].dropna()
-        
-        if valid_timestamps.empty:
-            st.error("All timestamps are invalid. Cannot proceed with data processing.")
-            return None
-        else:
-            # Calculate the mean timestamp (excluding invalid ones)
-            mean_timestamp = valid_timestamps.mean()
-
-            # Fill invalid timestamps with the mean timestamp
-            df['timestamp'].fillna(mean_timestamp, inplace=True)
-
-    # Extract day of the week from the timestamp
-    df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
-    
     # Convert categorical columns to numeric using LabelEncoder
     le = LabelEncoder()
     df['event'] = le.fit_transform(df['event'].astype(str))
