@@ -33,6 +33,9 @@ def load_and_process_data(uploaded_file=None):
         st.error("No file provided or uploaded.")
         return None
 
+    # Store the number of rows before cleaning
+    initial_row_count = df.shape[0]
+
     # Drop rows with any null values
     df = df.dropna()
 
@@ -45,10 +48,12 @@ def load_and_process_data(uploaded_file=None):
         return None
     
     # Drop rows with invalid or missing timestamps
-    if df['timestamp'].isnull().sum() > 0:
-        st.warning(f"There are {df['timestamp'].isnull().sum()} invalid or missing timestamps in the dataset. These rows will be dropped.")
+    rows_dropped = df['timestamp'].isnull().sum()
+    if rows_dropped > 0:
+        st.warning(f"There are {rows_dropped} invalid or missing timestamps in the dataset. These rows will be dropped.")
         df = df.dropna(subset=['timestamp'])
 
+    # Extract day of the week
     df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
     
     # Convert categorical columns to numeric using LabelEncoder
@@ -60,10 +65,15 @@ def load_and_process_data(uploaded_file=None):
     # Drop rows with any remaining null values after processing
     df = df.dropna()
 
+    # Store the number of rows after cleaning
+    final_row_count = df.shape[0]
+
     # Check if the DataFrame is empty after cleaning
-    if df.empty:
-        st.error("No valid data left after cleaning. Please upload a file with valid data.")
+    if final_row_count == 0:
+        st.error(f"All data has been removed during cleaning. Please upload a file with valid data.")
         return None
+    elif final_row_count < initial_row_count:
+        st.warning(f"{initial_row_count - final_row_count} rows were removed due to missing or invalid data.")
 
     return df
 
