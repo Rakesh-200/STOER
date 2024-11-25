@@ -50,6 +50,9 @@ def load_and_process_data(uploaded_file=None):
     df['weather_conditions'] = le.fit_transform(df['weather_conditions'].astype(str))
     df['holiday'] = le.fit_transform(df['holiday'].astype(str))
 
+    # Drop rows with any remaining null values after processing
+    df = df.dropna()
+
     return df
 
 # --------- Traffic Optimization ---------
