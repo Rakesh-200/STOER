@@ -3,6 +3,7 @@ import dask.dataframe as dd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 import streamlit as st
+import joblib  # for caching the trained model
 
 # --------- Data Preprocessing ---------
 
@@ -10,10 +11,12 @@ import streamlit as st
 def load_and_process_data(uploaded_file=None):
     """
     Load and process the traffic data from the uploaded file.
+    Uses Dask for large file handling and caching.
     """
     if uploaded_file is not None:
-        # Read the file as a pandas DataFrame
-        df = pd.read_csv(uploaded_file)
+        # Read the file as a Dask DataFrame to handle large files
+        ddf = dd.read_csv(uploaded_file)
+        df = ddf.compute()  # Convert to pandas dataframe after processing
         st.write(f"Successfully loaded uploaded CSV file.")
         
         # Strip any leading/trailing spaces in column names for accuracy
@@ -58,9 +61,11 @@ def load_and_process_data(uploaded_file=None):
 
 # --------- Traffic Optimization ---------
 
+@st.cache  # Cache the trained model to avoid retraining on each run
 def train_traffic_model(df):
     """
     Train a Random Forest model to predict traffic flow based on features.
+    Use n_jobs=-1 to speed up training by using multiple cores.
     """
     # Features and target variable
     features = ['public_transport_usage', 'bike_sharing_usage', 
@@ -87,8 +92,8 @@ def train_traffic_model(df):
         st.error("No data available for training. Please ensure there are enough valid rows in your dataset.")
         return None
     
-    # Train a Random Forest model
-    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    # Train a Random Forest model (with parallel processing)
+    model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
     model.fit(X, y)
     
     return model
@@ -98,19 +103,6 @@ def predict_traffic(model, new_data):
     Predict traffic flow for new data using the trained model.
     """
     return model.predict(new_data)
-
-# --------- Emission Reduction ---------
-
-def recommend_emission_reduction(traffic_flow, weather_conditions, public_transport_usage):
-    """
-    Provide emission reduction recommendations based on traffic flow and conditions.
-    """
-    if traffic_flow > 5000 and weather_conditions == 'Clear':
-        return "Optimize traffic lights and encourage bike usage."
-    elif public_transport_usage > 1000:
-        return "Increase public transport frequency."
-    else:
-        return "Promote carpooling and use eco-friendly vehicles."
 
 # --------- Streamlit Interface ---------
 
