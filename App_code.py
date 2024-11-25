@@ -45,8 +45,9 @@ def load_and_process_data(uploaded_file=None):
     df['weather_conditions'] = le.fit_transform(df['weather_conditions'].astype(str))
     df['holiday'] = le.fit_transform(df['holiday'].astype(str))
 
-    # Fill missing values with the mean of each column (for numerical columns)
-    df.fillna(df.mean(), inplace=True)
+    # Fill missing values for numeric columns with the mean of each numeric column
+    numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
 
     # Check if the DataFrame is empty after cleaning
     if df.empty:
