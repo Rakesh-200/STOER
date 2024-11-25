@@ -53,6 +53,11 @@ def load_and_process_data(uploaded_file=None):
     # Drop rows with any remaining null values after processing
     df = df.dropna()
 
+    # Check if the DataFrame is empty after dropping rows
+    if df.empty:
+        st.error("No valid data left after cleaning. Please upload a file with valid data.")
+        return None
+
     return df
 
 # --------- Traffic Optimization ---------
@@ -80,6 +85,11 @@ def train_traffic_model(df):
     # Ensure all data is numeric (this step is more robust after encoding)
     X = X.apply(pd.to_numeric, errors='coerce')
     y = y.apply(pd.to_numeric, errors='coerce')
+    
+    # Check if there is data for training
+    if X.shape[0] == 0:
+        st.error("No data available for training. Please ensure there are enough valid rows in your dataset.")
+        return None
     
     # Train a Random Forest model
     model = RandomForestRegressor(n_estimators=100, random_state=42)
@@ -127,51 +137,53 @@ if uploaded_file is not None:
         # Train the traffic model
         traffic_model = train_traffic_model(data)
 
-        # User inputs for traffic flow prediction
-        st.header("Predict Traffic Flow")
-        public_transport_users = st.number_input('Number of Public Transport Users (per hour)', min_value=0)
-        bike_sharing_usage = st.number_input('Bike Sharing Usage (per hour)', min_value=0)
-        pedestrian_count = st.number_input('Pedestrian Count (per hour)', min_value=0)
-        temperature = st.number_input('Temperature (°C)', min_value=-50, max_value=50)
-        humidity = st.number_input('Humidity (%)', min_value=0, max_value=100)
-        road_incidents = st.number_input('Road Incidents (per hour)', min_value=0)
-        public_transport_delay = st.number_input('Public Transport Delay (minutes)', min_value=0)
-        bike_availability = st.number_input('Bike Availability (per hour)', min_value=0)
-        pedestrian_incidents = st.number_input('Pedestrian Incidents (per hour)', min_value=0)
+        # Proceed only if model training is successful
+        if traffic_model is not None:
+            # User inputs for traffic flow prediction
+            st.header("Predict Traffic Flow")
+            public_transport_users = st.number_input('Number of Public Transport Users (per hour)', min_value=0)
+            bike_sharing_usage = st.number_input('Bike Sharing Usage (per hour)', min_value=0)
+            pedestrian_count = st.number_input('Pedestrian Count (per hour)', min_value=0)
+            temperature = st.number_input('Temperature (°C)', min_value=-50, max_value=50)
+            humidity = st.number_input('Humidity (%)', min_value=0, max_value=100)
+            road_incidents = st.number_input('Road Incidents (per hour)', min_value=0)
+            public_transport_delay = st.number_input('Public Transport Delay (minutes)', min_value=0)
+            bike_availability = st.number_input('Bike Availability (per hour)', min_value=0)
+            pedestrian_incidents = st.number_input('Pedestrian Incidents (per hour)', min_value=0)
 
-        # Prepare the input data for prediction
-        input_data = {
-            'public_transport_usage': [public_transport_users],
-            'bike_sharing_usage': [bike_sharing_usage],
-            'pedestrian_count': [pedestrian_count],
-            'temperature': [temperature],
-            'humidity': [humidity],
-            'road_incidents': [road_incidents],
-            'public_transport_delay': [public_transport_delay],
-            'bike_availability': [bike_availability],
-            'pedestrian_incidents': [pedestrian_incidents],
-            'event': [0],  # Assuming default or encoded value for 'event'
-            'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
-            'holiday': [0],  # Assuming default or encoded value for 'holiday'
-            'day_of_week': [0]  # Default day of week
-        }
+            # Prepare the input data for prediction
+            input_data = {
+                'public_transport_usage': [public_transport_users],
+                'bike_sharing_usage': [bike_sharing_usage],
+                'pedestrian_count': [pedestrian_count],
+                'temperature': [temperature],
+                'humidity': [humidity],
+                'road_incidents': [road_incidents],
+                'public_transport_delay': [public_transport_delay],
+                'bike_availability': [bike_availability],
+                'pedestrian_incidents': [pedestrian_incidents],
+                'event': [0],  # Assuming default or encoded value for 'event'
+                'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
+                'holiday': [0],  # Assuming default or encoded value for 'holiday'
+                'day_of_week': [0]  # Default day of week
+            }
 
-        input_df = pd.DataFrame(input_data)
+            input_df = pd.DataFrame(input_data)
 
-        # Predict traffic flow based on user input
-        if st.button('Predict Traffic Flow'):
-            traffic_flow_prediction = predict_traffic(traffic_model, input_df)
-            st.write(f"Predicted Traffic Flow: {traffic_flow_prediction[0]:.2f} vehicles per hour")
+            # Predict traffic flow based on user input
+            if st.button('Predict Traffic Flow'):
+                traffic_flow_prediction = predict_traffic(traffic_model, input_df)
+                st.write(f"Predicted Traffic Flow: {traffic_flow_prediction[0]:.2f} vehicles per hour")
 
-        # User inputs for emission reduction recommendation
-        st.header("Recommend Emission Reduction Strategy")
-        weather_conditions = st.selectbox('Weather Conditions', ['Clear', 'Cloudy', 'Rainy', 'Snowy'])
-        public_transport_usage = st.number_input('Public Transport Usage (per hour)', min_value=0)
+            # User inputs for emission reduction recommendation
+            st.header("Recommend Emission Reduction Strategy")
+            weather_conditions = st.selectbox('Weather Conditions', ['Clear', 'Cloudy', 'Rainy', 'Snowy'])
+            public_transport_usage = st.number_input('Public Transport Usage (per hour)', min_value=0)
 
-        # Provide emission reduction recommendation
-        if st.button('Get Emission Reduction Recommendation'):
-            emission_recommendation = recommend_emission_reduction(
-                traffic_flow_prediction[0], weather_conditions, public_transport_usage)
-            st.write(f"Recommended Strategy: {emission_recommendation}")
+            # Provide emission reduction recommendation
+            if st.button('Get Emission Reduction Recommendation'):
+                emission_recommendation = recommend_emission_reduction(
+                    traffic_flow_prediction[0], weather_conditions, public_transport_usage)
+                st.write(f"Recommended Strategy: {emission_recommendation}")
 else:
     st.write("Please upload a CSV file to get started.")
