@@ -6,7 +6,7 @@ import streamlit as st
 
 # --------- Data Preprocessing ---------
 
-@st.cache_data
+@st.cache
 def load_and_process_data(uploaded_file=None):
     """
     Load and process the traffic data from the uploaded file.
@@ -37,9 +37,16 @@ def load_and_process_data(uploaded_file=None):
     df = df.dropna()
 
     # Preprocess the data (handling types, etc.)
-    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')  # Convert to datetime and handle errors
+    try:
+        # Specify the exact format of the timestamp (DD-MM-YYYY hh.mm.ss AM/PM)
+        df['timestamp'] = pd.to_datetime(df['timestamp'], format='%d-%m-%Y %I.%M.%S %p', errors='coerce')
+    except Exception as e:
+        st.error(f"Error while parsing timestamps: {str(e)}")
+        return None
+    
+    # Drop rows with invalid or missing timestamps
     if df['timestamp'].isnull().sum() > 0:
-        st.warning("There are invalid or missing timestamps in the dataset. These rows will be dropped.")
+        st.warning(f"There are {df['timestamp'].isnull().sum()} invalid or missing timestamps in the dataset. These rows will be dropped.")
         df = df.dropna(subset=['timestamp'])
 
     df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
@@ -175,15 +182,15 @@ if uploaded_file is not None:
                 traffic_flow_prediction = predict_traffic(traffic_model, input_df)
                 st.write(f"Predicted Traffic Flow: {traffic_flow_prediction[0]:.2f} vehicles per hour")
 
-                # Now that the prediction is available, allow for emission reduction recommendation
-                st.header("Recommend Emission Reduction Strategy")
-                weather_conditions = st.selectbox('Weather Conditions', ['Clear', 'Cloudy', 'Rainy', 'Snowy'])
-                public_transport_usage = st.number_input('Public Transport Usage (per hour)', min_value=0)
+            # User inputs for emission reduction recommendation
+            st.header("Recommend Emission Reduction Strategy")
+            weather_conditions = st.selectbox('Weather Conditions', ['Clear', 'Cloudy', 'Rainy', 'Snowy'])
+            public_transport_usage = st.number_input('Public Transport Usage (per hour)', min_value=0)
 
-                # Provide emission reduction recommendation
-                if st.button('Get Emission Reduction Recommendation'):
-                    emission_recommendation = recommend_emission_reduction(
-                        traffic_flow_prediction[0], weather_conditions, public_transport_usage)
-                    st.write(f"Recommended Strategy: {emission_recommendation}")
+            # Provide emission reduction recommendation
+            if st.button('Get Emission Reduction Recommendation'):
+                emission_recommendation = recommend_emission_reduction(
+                    traffic_flow_prediction[0], weather_conditions, public_transport_usage)
+                st.write(f"Recommended Strategy: {emission_recommendation}")
 else:
     st.write("Please upload a CSV file to get started.")
