@@ -1,8 +1,8 @@
 import pandas as pd
-import dask.dataframe as dd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 import streamlit as st
+from io import BytesIO
 
 # --------- Data Preprocessing ---------
 
@@ -12,32 +12,34 @@ def load_and_process_data(uploaded_file=None):
     Load and process the traffic data from the uploaded file.
     """
     if uploaded_file is not None:
-        # Read the file as a pandas DataFrame
-        df = pd.read_csv(uploaded_file)
-        st.write(f"Successfully loaded uploaded CSV file.")
-        
-        # Strip any leading/trailing spaces in column names for accuracy
-        df.columns = df.columns.str.strip()
+        try:
+            # Convert the uploaded file to a file-like object
+            file_bytes = BytesIO(uploaded_file.read())
+            df = pd.read_csv(file_bytes)
+            st.write(f"Successfully loaded uploaded CSV file.")
+            
+            # Strip any leading/trailing spaces in column names for accuracy
+            df.columns = df.columns.str.strip()
 
-        # Check if the required columns are present in the uploaded CSV
-        required_columns = ['public_transport_usage', 'traffic_flow', 
-                            'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 
-                            'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
-                            'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
-        
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            st.error(f"Missing required columns: {', '.join(missing_columns)}")
+            # Check if the required columns are present in the uploaded CSV
+            required_columns = ['public_transport_usage', 'traffic_flow', 'bike_sharing_usage', 
+                                'pedestrian_count', 'weather_conditions', 'day_of_week', 
+                                'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
+                                'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
+            
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                st.error(f"Missing required columns: {', '.join(missing_columns)}")
+                return None
+        except Exception as e:
+            st.error(f"An error occurred while reading the CSV file: {e}")
             return None
     else:
         st.error("No file provided or uploaded.")
         return None
 
-    # Drop rows with any null values in the required columns
-    df = df.dropna(subset=required_columns)
-
-    # Remove the timestamp column (since we're no longer considering it)
-    df = df.drop(columns=['timestamp'], errors='ignore')
+    # Drop rows with any null values initially
+    df = df.dropna()
 
     # Convert categorical columns to numeric using LabelEncoder
     le = LabelEncoder()
@@ -45,13 +47,15 @@ def load_and_process_data(uploaded_file=None):
     df['weather_conditions'] = le.fit_transform(df['weather_conditions'].astype(str))
     df['holiday'] = le.fit_transform(df['holiday'].astype(str))
 
-    # Fill missing values for numeric columns with the mean of each numeric column
-    numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+    # Fill missing numerical values with column mean
+    df.fillna(df.mean(), inplace=True)
 
-    # Check if the DataFrame is empty after cleaning
+    # Drop rows with any remaining null values after processing
+    df = df.dropna()
+
+    # Check if the DataFrame is empty after dropping rows
     if df.empty:
-        st.error(f"All data has been removed during cleaning. Please upload a file with valid data.")
+        st.error("No valid data left after cleaning. Please upload a file with valid data.")
         return None
 
     return df
@@ -66,21 +70,21 @@ def train_traffic_model(df):
     features = ['public_transport_usage', 'bike_sharing_usage', 
                 'pedestrian_count', 'temperature', 'humidity', 'road_incidents', 
                 'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
-                'event', 'weather_conditions', 'holiday']
+                'event', 'weather_conditions', 'holiday', 'day_of_week']
     target = 'traffic_flow'
     
     # Select features and target
     X = df[features]
     y = df[target]
     
+    # Ensure all data is numeric (this step is more robust after encoding)
+    X = X.apply(pd.to_numeric, errors='coerce')
+    y = y.apply(pd.to_numeric, errors='coerce')
+    
     # Check for missing values (again) in case any are left after preprocessing
     if X.isnull().sum().sum() > 0 or y.isnull().sum() > 0:
         st.error("There are still missing values in the features or target variable.")
         return None
-
-    # Ensure all data is numeric (this step is more robust after encoding)
-    X = X.apply(pd.to_numeric, errors='coerce')
-    y = y.apply(pd.to_numeric, errors='coerce')
     
     # Check if there is data for training
     if X.shape[0] == 0:
@@ -160,7 +164,8 @@ if uploaded_file is not None:
                 'pedestrian_incidents': [pedestrian_incidents],
                 'event': [0],  # Assuming default or encoded value for 'event'
                 'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
-                'holiday': [0]  # Assuming default or encoded value for 'holiday'
+                'holiday': [0],  # Assuming default or encoded value for 'holiday'
+                'day_of_week': [0]  # Default day of week
             }
 
             input_df = pd.DataFrame(input_data)
