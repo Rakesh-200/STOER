@@ -16,10 +16,10 @@ def load_and_process_data(uploaded_file=None):
         st.write(f"Successfully loaded uploaded CSV file.")
         
         # Check if the required columns are present in the uploaded CSV
-        required_columns = ['timestamp', 'Number of public transport users per hour', 'Traffic flow', 
-                            'Bike sharing usage', 'Pedestrian count', 'Weather Conditions', 'Day of the week', 
-                            'Event', 'Temperature', 'Humidity', 'Road Incidents', 'Public transport delay', 
-                            'Bike availability', 'Pedestrian incidents']
+        required_columns = ['timestamp', 'public_transport_usage', 'traffic_flow', 
+                            'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 'day_of_week', 
+                            'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
+                            'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
         
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
@@ -36,11 +36,12 @@ def load_and_process_data(uploaded_file=None):
         st.warning("There are invalid or missing timestamps in the dataset. These rows will be dropped.")
         df = df.dropna(subset=['timestamp'])
 
-    df['Day of Week'] = df['timestamp'].dt.dayofweek  # Extract day of week
+    df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
     
     # Convert categorical columns to category type for optimization
-    df['Event'] = df['Event'].astype('category')
-    df['Weather Conditions'] = df['Weather Conditions'].astype('category')
+    df['event'] = df['event'].astype('category')
+    df['weather_conditions'] = df['weather_conditions'].astype('category')
+    df['holiday'] = df['holiday'].astype('category')
     
     return df
 
@@ -51,10 +52,10 @@ def train_traffic_model(df):
     Train a Random Forest model to predict traffic flow based on features.
     """
     # Features and target variable
-    features = ['Number of public transport users per hour', 'Bike sharing usage', 
-                'Pedestrian count', 'Temperature', 'Humidity', 'Road Incidents', 
-                'Public transport delay', 'Bike availability', 'Pedestrian incidents']
-    target = 'Traffic flow'
+    features = ['public_transport_usage', 'bike_sharing_usage', 
+                'pedestrian_count', 'temperature', 'humidity', 'road_incidents', 
+                'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
+    target = 'traffic_flow'
     
     # Select features and target
     X = df[features]
@@ -120,15 +121,15 @@ if uploaded_file is not None:
 
         # Prepare the input data for prediction
         input_data = {
-            'Number of public transport users per hour': [public_transport_users],
-            'Bike sharing usage': [bike_sharing_usage],
-            'Pedestrian count': [pedestrian_count],
-            'Temperature': [temperature],
-            'Humidity': [humidity],
-            'Road Incidents': [road_incidents],
-            'Public transport delay': [public_transport_delay],
-            'Bike availability': [bike_availability],
-            'Pedestrian incidents': [pedestrian_incidents]
+            'public_transport_usage': [public_transport_users],
+            'bike_sharing_usage': [bike_sharing_usage],
+            'pedestrian_count': [pedestrian_count],
+            'temperature': [temperature],
+            'humidity': [humidity],
+            'road_incidents': [road_incidents],
+            'public_transport_delay': [public_transport_delay],
+            'bike_availability': [bike_availability],
+            'pedestrian_incidents': [pedestrian_incidents]
         }
 
         input_df = pd.DataFrame(input_data)
