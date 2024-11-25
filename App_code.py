@@ -50,6 +50,9 @@ def load_and_process_data(uploaded_file=None):
     if invalid_timestamp_count > 0:
         st.warning(f"There are {invalid_timestamp_count} invalid or missing timestamps.")
         
+        # Print the first few invalid rows for debugging
+        st.write("Invalid rows:", df[df['timestamp'].isnull()].head())
+
         # If invalid timestamps are found, let's see how many rows are valid
         valid_timestamps = df['timestamp'].dropna()
         
