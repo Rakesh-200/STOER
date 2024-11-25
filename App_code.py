@@ -3,7 +3,7 @@ import dask.dataframe as dd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
 import streamlit as st
-import joblib  # for caching the trained model
+from io import BytesIO
 
 # --------- Data Preprocessing ---------
 
@@ -11,89 +11,102 @@ import joblib  # for caching the trained model
 def load_and_process_data(uploaded_file=None):
     """
     Load and process the traffic data from the uploaded file.
-    Uses Dask for large file handling and caching.
     """
     if uploaded_file is not None:
-        # Read the file as a Dask DataFrame to handle large files
-        ddf = dd.read_csv(uploaded_file)
-        df = ddf.compute()  # Convert to pandas dataframe after processing
-        st.write(f"Successfully loaded uploaded CSV file.")
-        
-        # Strip any leading/trailing spaces in column names for accuracy
-        df.columns = df.columns.str.strip()
+        # Use BytesIO to read the file
+        try:
+            # Convert the uploaded file to a file-like object
+            file_bytes = BytesIO(uploaded_file.read())
+            df = pd.read_csv(file_bytes)
+            st.write(f"Successfully loaded uploaded CSV file.")
+            
+            # Strip any leading/trailing spaces in column names for accuracy
+            df.columns = df.columns.str.strip()
 
-        # Check if the required columns are present in the uploaded CSV
-        required_columns = ['public_transport_usage', 'traffic_flow', 
-                            'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 
-                            'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
-                            'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
-        
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            st.error(f"Missing required columns: {', '.join(missing_columns)}")
+            # Check if the required columns are present in the uploaded CSV
+            required_columns = ['timestamp', 'public_transport_usage', 'traffic_flow', 
+                                'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 'day_of_week', 
+                                'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
+                                'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
+            
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                st.error(f"Missing required columns: {', '.join(missing_columns)}")
+                return None
+        except Exception as e:
+            st.error(f"An error occurred while reading the CSV file: {e}")
             return None
     else:
         st.error("No file provided or uploaded.")
         return None
 
-    # Drop rows with any null values in the required columns
-    df = df.dropna(subset=required_columns)
+    # Drop rows with any null values initially
+    df = df.dropna()
 
-    # Remove the timestamp column (since we're no longer considering it)
-    df = df.drop(columns=['timestamp'], errors='ignore')
+    # Preprocess the data (handling types, etc.)
+    # Correct timestamp format
+    df['timestamp'] = pd.to_datetime(df['timestamp'], format='%d-%m-%Y %I.%M.%S %p', errors='coerce')  
 
+    # Check for invalid timestamps and drop them
+    if df['timestamp'].isnull().sum() > 0:
+        st.warning("There are invalid or missing timestamps in the dataset. These rows will be dropped.")
+        df = df.dropna(subset=['timestamp'])
+
+    # Add day_of_week feature from timestamp
+    df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
+    
     # Convert categorical columns to numeric using LabelEncoder
     le = LabelEncoder()
     df['event'] = le.fit_transform(df['event'].astype(str))
     df['weather_conditions'] = le.fit_transform(df['weather_conditions'].astype(str))
     df['holiday'] = le.fit_transform(df['holiday'].astype(str))
 
-    # Fill missing values for numeric columns with the mean of each numeric column
-    numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
-    df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
+    # Fill missing numerical values with column mean
+    df.fillna(df.mean(), inplace=True)
 
-    # Check if the DataFrame is empty after cleaning
+    # Drop rows with any remaining null values after processing
+    df = df.dropna()
+
+    # Check if the DataFrame is empty after dropping rows
     if df.empty:
-        st.error(f"All data has been removed during cleaning. Please upload a file with valid data.")
+        st.error("No valid data left after cleaning. Please upload a file with valid data.")
         return None
 
     return df
 
 # --------- Traffic Optimization ---------
 
-@st.cache  # Cache the trained model to avoid retraining on each run
 def train_traffic_model(df):
     """
     Train a Random Forest model to predict traffic flow based on features.
-    Use n_jobs=-1 to speed up training by using multiple cores.
     """
     # Features and target variable
     features = ['public_transport_usage', 'bike_sharing_usage', 
                 'pedestrian_count', 'temperature', 'humidity', 'road_incidents', 
                 'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
-                'event', 'weather_conditions', 'holiday']
+                'event', 'weather_conditions', 'holiday', 'day_of_week']
     target = 'traffic_flow'
     
     # Select features and target
     X = df[features]
     y = df[target]
     
+    # Ensure all data is numeric (this step is more robust after encoding)
+    X = X.apply(pd.to_numeric, errors='coerce')
+    y = y.apply(pd.to_numeric, errors='coerce')
+    
     # Check for missing values (again) in case any are left after preprocessing
     if X.isnull().sum().sum() > 0 or y.isnull().sum() > 0:
         st.error("There are still missing values in the features or target variable.")
         return None
-
-    # Ensure all data is numeric (this step is more robust after encoding)
-    X = X.apply(pd.to_numeric, errors='coerce')
-    y = y.apply(pd.to_numeric, errors='coerce')
     
     # Check if there is data for training
     if X.shape[0] == 0:
         st.error("No data available for training. Please ensure there are enough valid rows in your dataset.")
         return None
     
-    # Train a Random Forest model (with parallel processing)
-    model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+    # Train a Random Forest model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
     
     return model
@@ -103,6 +116,19 @@ def predict_traffic(model, new_data):
     Predict traffic flow for new data using the trained model.
     """
     return model.predict(new_data)
+
+# --------- Emission Reduction ---------
+
+def recommend_emission_reduction(traffic_flow, weather_conditions, public_transport_usage):
+    """
+    Provide emission reduction recommendations based on traffic flow and conditions.
+    """
+    if traffic_flow > 5000 and weather_conditions == 'Clear':
+        return "Optimize traffic lights and encourage bike usage."
+    elif public_transport_usage > 1000:
+        return "Increase public transport frequency."
+    else:
+        return "Promote carpooling and use eco-friendly vehicles."
 
 # --------- Streamlit Interface ---------
 
@@ -152,7 +178,8 @@ if uploaded_file is not None:
                 'pedestrian_incidents': [pedestrian_incidents],
                 'event': [0],  # Assuming default or encoded value for 'event'
                 'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
-                'holiday': [0]  # Assuming default or encoded value for 'holiday'
+                'holiday': [0],  # Assuming default or encoded value for 'holiday'
+                'day_of_week': [0]  # Default day of week
             }
 
             input_df = pd.DataFrame(input_data)
