@@ -68,6 +68,7 @@ def load_and_process_data(uploaded_file=None):
 
                 # Fill invalid timestamps with the mean timestamp
                 df['timestamp'].fillna(mean_timestamp, inplace=True)
+                st.write(f"Filled invalid timestamps with the mean timestamp: {mean_timestamp}")
 
         # Extract day of the week from the timestamp
         df['day_of_week'] = df['timestamp'].dt.dayofweek  # Extract day of the week
