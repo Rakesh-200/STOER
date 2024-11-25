@@ -14,14 +14,29 @@ def load_and_process_data(uploaded_file=None):
         # Read the file as a pandas DataFrame
         df = pd.read_csv(uploaded_file)
         st.write(f"Successfully loaded uploaded CSV file.")
+        
+        # Check if the required columns are present in the uploaded CSV
+        required_columns = ['timestamp', 'Number of public transport users per hour', 'Traffic flow', 
+                            'Bike sharing usage', 'Pedestrian count', 'Weather Conditions', 'Day of the week', 
+                            'Event', 'Temperature', 'Humidity', 'Road Incidents', 'Public transport delay', 
+                            'Bike availability', 'Pedestrian incidents']
+        
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            st.error(f"Missing required columns: {', '.join(missing_columns)}")
+            return None
     else:
         st.error("No file provided or uploaded.")
         return None
 
     # Preprocess the data (handling missing values, types, etc.)
     df = df.dropna()  # Drop missing values
-    df['Timestamp'] = pd.to_datetime(df['Timestamp'])  # Convert to datetime
-    df['Day of Week'] = df['Timestamp'].dt.dayofweek  # Extract day of week
+    df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')  # Convert to datetime and handle errors
+    if df['timestamp'].isnull().sum() > 0:
+        st.warning("There are invalid or missing timestamps in the dataset. These rows will be dropped.")
+        df = df.dropna(subset=['timestamp'])
+
+    df['Day of Week'] = df['timestamp'].dt.dayofweek  # Extract day of week
     
     # Convert categorical columns to category type for optimization
     df['Event'] = df['Event'].astype('category')
