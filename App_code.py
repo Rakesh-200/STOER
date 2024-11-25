@@ -15,6 +15,9 @@ def load_and_process_data(uploaded_file=None):
         df = pd.read_csv(uploaded_file)
         st.write(f"Successfully loaded uploaded CSV file.")
         
+        # Strip any leading/trailing spaces in column names for accuracy
+        df.columns = df.columns.str.strip()
+
         # Check if the required columns are present in the uploaded CSV
         required_columns = ['timestamp', 'public_transport_usage', 'traffic_flow', 
                             'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 'day_of_week', 
@@ -29,8 +32,10 @@ def load_and_process_data(uploaded_file=None):
         st.error("No file provided or uploaded.")
         return None
 
-    # Preprocess the data (handling missing values, types, etc.)
-    df = df.dropna()  # Drop missing values
+    # Drop rows with any null values
+    df = df.dropna()
+
+    # Preprocess the data (handling types, etc.)
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')  # Convert to datetime and handle errors
     if df['timestamp'].isnull().sum() > 0:
         st.warning("There are invalid or missing timestamps in the dataset. These rows will be dropped.")
