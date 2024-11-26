@@ -23,7 +23,8 @@ def load_and_process_data(uploaded_file=None):
         required_columns = ['public_transport_usage', 'traffic_flow', 
                             'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 
                             'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
-                            'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 'timestamp']
+                            'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
+                            'timestamp', 'required_policemen']
         
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
@@ -38,11 +39,8 @@ def load_and_process_data(uploaded_file=None):
 
     # Convert 'timestamp' column to Unix format (seconds since 1970)
     if 'timestamp' in df.columns:
-        # Convert 'timestamp' column to datetime using the exact format
         df['timestamp'] = pd.to_datetime(df['timestamp'], format='%d-%m-%Y %I.%M.%S %p', errors='coerce')
-
-        # Convert datetime to Unix timestamp (seconds since 1970)
-        df['timestamp'] = df['timestamp'].astype(int) // 10**9  # Convert to seconds (not milliseconds)
+        df['timestamp'] = df['timestamp'].astype(int) // 10**9  # Convert to seconds
 
     # Convert categorical columns to numeric using LabelEncoder
     le = LabelEncoder()
@@ -67,32 +65,32 @@ def train_traffic_model(df):
     """
     Train a Random Forest model to predict traffic flow based on features.
     """
-    # Features and target variable
     features = ['public_transport_usage', 'bike_sharing_usage', 
                 'pedestrian_count', 'temperature', 'humidity', 'road_incidents', 
                 'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
-                'event', 'weather_conditions', 'holiday', 'timestamp']  # Include 'timestamp' as a feature
+                'event', 'weather_conditions', 'holiday', 'timestamp']
     target = 'traffic_flow'
     
-    # Select features and target
     X = df[features]
     y = df[target]
     
-    # Check for missing values (again) in case any are left after preprocessing
-    if X.isnull().sum().sum() > 0 or y.isnull().sum() > 0:
-        st.error("There are still missing values in the features or target variable.")
-        return None
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    
+    return model
 
-    # Ensure all data is numeric (this step is more robust after encoding)
-    X = X.apply(pd.to_numeric, errors='coerce')
-    y = y.apply(pd.to_numeric, errors='coerce')
+def train_policemen_model(df):
+    """
+    Train a model to predict the number of policemen required based on traffic flow and other features.
+    """
+    features = ['traffic_flow', 'temperature', 'humidity', 'road_incidents', 
+                'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
+                'event', 'weather_conditions', 'holiday', 'timestamp']
+    target = 'required_policemen'
     
-    # Check if there is data for training
-    if X.shape[0] == 0:
-        st.error("No data available for training. Please ensure there are enough valid rows in your dataset.")
-        return None
+    X = df[features]
+    y = df[target]
     
-    # Train a Random Forest model
     model = RandomForestRegressor(n_estimators=100, random_state=42)
     model.fit(X, y)
     
@@ -104,12 +102,15 @@ def predict_traffic(model, new_data):
     """
     return model.predict(new_data)
 
+def predict_policemen(model, new_data):
+    """
+    Predict the number of policemen required based on traffic flow and other factors.
+    """
+    return model.predict(new_data)
+
 # --------- Emission Reduction ---------
 
 def recommend_emission_reduction(traffic_flow, weather_conditions, public_transport_usage):
-    """
-    Provide emission reduction recommendations based on traffic flow and conditions.
-    """
     if traffic_flow > 5000 and weather_conditions == 'Clear':
         return "Optimize traffic lights and encourage bike usage."
     elif public_transport_usage > 1000:
@@ -119,33 +120,29 @@ def recommend_emission_reduction(traffic_flow, weather_conditions, public_transp
 
 # --------- Streamlit Interface ---------
 
-# Streamlit Title and Description
 st.title("Smart Traffic Optimization and Emission Reduction System")
 st.write("""
-    This system predicts traffic flow and suggests actions for emission reduction based on traffic and environmental factors.
+    This system predicts traffic flow, recommends emission reduction strategies, 
+    and predicts the number of policemen required to optimize traffic.
 """)
 
-# File upload section
-st.header("Upload Your Traffic Data CSV")
 uploaded_file = st.file_uploader("Upload a CSV file containing traffic data", type="csv")
 
-# If the user uploaded a file, process it
 if uploaded_file is not None:
     data = load_and_process_data(uploaded_file=uploaded_file)
 
-    # Proceed with model training and prediction only if data is available
     if data is not None:
-        # Show the dataframe with the Unix timestamp
         st.write("Processed Data:", data)
-
-        # Train the traffic model
+        
         traffic_model = train_traffic_model(data)
+        policemen_model = train_policemen_model(data)
 
-        # Proceed only if model training is successful
-        if traffic_model is not None:
-            # User inputs for traffic flow prediction
+        if traffic_model and policemen_model:
+            st.success("Models trained successfully!")
+
+            # Predict traffic flow
             st.header("Predict Traffic Flow")
-            public_transport_users = st.number_input('Number of Public Transport Users (per hour)', min_value=0)
+            public_transport_users = st.number_input('Public Transport Users (per hour)', min_value=0)
             bike_sharing_usage = st.number_input('Bike Sharing Usage (per hour)', min_value=0)
             pedestrian_count = st.number_input('Pedestrian Count (per hour)', min_value=0)
             temperature = st.number_input('Temperature (°C)', min_value=-50, max_value=50)
@@ -155,7 +152,6 @@ if uploaded_file is not None:
             bike_availability = st.number_input('Bike Availability (per hour)', min_value=0)
             pedestrian_incidents = st.number_input('Pedestrian Incidents (per hour)', min_value=0)
 
-            # Prepare the input data for prediction
             input_data = {
                 'public_transport_usage': [public_transport_users],
                 'bike_sharing_usage': [bike_sharing_usage],
@@ -166,28 +162,21 @@ if uploaded_file is not None:
                 'public_transport_delay': [public_transport_delay],
                 'bike_availability': [bike_availability],
                 'pedestrian_incidents': [pedestrian_incidents],
-                'event': [0],  # Assuming default or encoded value for 'event'
-                'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
-                'holiday': [0],  # Assuming default or encoded value for 'holiday'
-                'timestamp': [0]  # Assuming default or encoded value for 'timestamp'
+                'event': [0], 'weather_conditions': [0], 'holiday': [0], 'timestamp': [0]
             }
 
             input_df = pd.DataFrame(input_data)
 
-            # Predict traffic flow based on user input
             if st.button('Predict Traffic Flow'):
                 traffic_flow_prediction = predict_traffic(traffic_model, input_df)
                 st.write(f"Predicted Traffic Flow: {traffic_flow_prediction[0]:.2f} vehicles per hour")
 
-            # User inputs for emission reduction recommendation
-            st.header("Recommend Emission Reduction Strategy")
-            weather_conditions = st.selectbox('Weather Conditions', ['Clear', 'Cloudy', 'Rainy', 'Snowy'])
-            public_transport_usage = st.number_input('Public Transport Usage (per hour)', min_value=0)
+            # Predict number of policemen
+            st.header("Predict Number of Policemen Required")
+            input_data['traffic_flow'] = [traffic_flow_prediction[0]]
 
-            # Provide emission reduction recommendation
-            if st.button('Get Emission Reduction Recommendation'):
-                emission_recommendation = recommend_emission_reduction(
-                    traffic_flow_prediction[0], weather_conditions, public_transport_usage)
-                st.write(f"Recommended Strategy: {emission_recommendation}")
+            if st.button('Predict Policemen Required'):
+                policemen_prediction = predict_policemen(policemen_model, pd.DataFrame(input_data))
+                st.write(f"Predicted Number of Policemen Required: {int(policemen_prediction[0])}")
 else:
     st.write("Please upload a CSV file to get started.")
