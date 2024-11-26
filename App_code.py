@@ -23,7 +23,7 @@ def load_and_process_data(uploaded_file=None):
         required_columns = ['public_transport_usage', 'traffic_flow', 
                             'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 
                             'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
-                            'public_transport_delay', 'bike_availability', 'pedestrian_incidents']
+                            'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 'timestamp']
         
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
@@ -36,8 +36,13 @@ def load_and_process_data(uploaded_file=None):
     # Drop rows with any null values in the required columns
     df = df.dropna(subset=required_columns)
 
-    # Remove the timestamp column (since we're no longer considering it)
-    df = df.drop(columns=['timestamp'], errors='ignore')
+    # Convert 'timestamp' column to Unix format (seconds since 1970)
+    if 'timestamp' in df.columns:
+        # Convert 'timestamp' column to datetime using the exact format
+        df['timestamp'] = pd.to_datetime(df['timestamp'], format='%d-%m-%Y %I.%M.%S %p', errors='coerce')
+
+        # Convert datetime to Unix timestamp (seconds since 1970)
+        df['timestamp'] = df['timestamp'].astype(int) // 10**9  # Convert to seconds (not milliseconds)
 
     # Convert categorical columns to numeric using LabelEncoder
     le = LabelEncoder()
@@ -66,7 +71,7 @@ def train_traffic_model(df):
     features = ['public_transport_usage', 'bike_sharing_usage', 
                 'pedestrian_count', 'temperature', 'humidity', 'road_incidents', 
                 'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
-                'event', 'weather_conditions', 'holiday']
+                'event', 'weather_conditions', 'holiday', 'timestamp']  # Include 'timestamp' as a feature
     target = 'traffic_flow'
     
     # Select features and target
@@ -130,6 +135,9 @@ if uploaded_file is not None:
 
     # Proceed with model training and prediction only if data is available
     if data is not None:
+        # Show the dataframe with the Unix timestamp
+        st.write("Processed Data:", data)
+
         # Train the traffic model
         traffic_model = train_traffic_model(data)
 
@@ -160,7 +168,8 @@ if uploaded_file is not None:
                 'pedestrian_incidents': [pedestrian_incidents],
                 'event': [0],  # Assuming default or encoded value for 'event'
                 'weather_conditions': [0],  # Assuming default or encoded value for 'weather_conditions'
-                'holiday': [0]  # Assuming default or encoded value for 'holiday'
+                'holiday': [0],  # Assuming default or encoded value for 'holiday'
+                'timestamp': [0]  # Assuming default or encoded value for 'timestamp'
             }
 
             input_df = pd.DataFrame(input_data)
