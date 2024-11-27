@@ -24,7 +24,7 @@ def load_and_process_data(uploaded_file=None):
                             'bike_sharing_usage', 'pedestrian_count', 'weather_conditions', 
                             'holiday', 'event', 'temperature', 'humidity', 'road_incidents', 
                             'public_transport_delay', 'bike_availability', 'pedestrian_incidents', 
-                            'timestamp', 'required_policemen']
+                            'timestamp']
         
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
